@@ -69,7 +69,7 @@ async function cargarEdificio(idEdificio) {
     }
 }
 
-// 3. TIMBRE ELECTRÓNICO (Ahora recibe quién es el visitante)
+// 3. TIMBRE ELECTRÓNICO (Ahora con Botones Interactivos para el Vecino)
 async function tocarTimbre(idDepartamento, piso, letra, identificacion = "Visita no identificada") {
     // A. Feedback visual rápido para la visita
     alert(`🔔 Enviando aviso a Piso ${piso} - ${letra}...\nPor favor, aguarda un momento en la puerta.`);
@@ -85,12 +85,25 @@ async function tocarTimbre(idDepartamento, piso, letra, identificacion = "Visita
             return;
         }
 
-        // B. Enviamos la alerta enriquecida a Telegram
+        // B. Configuración de los Botones de Respuesta Rápida (Teclado Interactivo)
+        const botonesRespuesta = {
+            inline_keyboard: [
+                [
+                    { text: "🏃‍♂️ ¡Ya bajo!", callback_data: `resp_bajo_${piso}_${letra}` },
+                    { text: "⏳ Esperá 5 min", callback_data: `resp_espera_${piso}_${letra}` }
+                ],
+                [
+                    { text: "📦 Dejalo en el hall", callback_data: `resp_hall_${piso}_${letra}` },
+                    { text: "❌ No estoy en casa", callback_data: `resp_noestoy_${piso}_${letra}` }
+                ]
+            ]
+        };
+
+        // C. Enviamos la alerta con el teclado adjunto a Telegram
         for (const residente of residentes) {
             if (!residente.telegram_chat_id) continue;
 
-            // Agregamos la identificación al mensaje de Telegram
-            const mensaje = `🔔 *¡DING DONG!*\nEstán tocando el timbre en el portero para el *Piso ${piso} - ${letra}*.\n\n👤 *Motivo / Dice ser:* ${identificacion}`;
+            const mensaje = `🔔 *¡DING DONG!*\nEstán tocando el timbre en el portero para el *Piso ${piso} - ${letra}*.\n\n👤 *Motivo / Dice ser:* ${identificacion}\n\n👇 *Elige una respuesta rápida para la pantalla de la puerta:*`;
             const urlTelegram = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
             
             await fetch(urlTelegram, {
@@ -99,7 +112,8 @@ async function tocarTimbre(idDepartamento, piso, letra, identificacion = "Visita
                 body: JSON.stringify({
                     chat_id: residente.telegram_chat_id,
                     text: mensaje,
-                    parse_mode: 'Markdown'
+                    parse_mode: 'Markdown',
+                    reply_markup: botonesRespuesta // <- ¡ACÁ ESTÁ LA MAGIA!
                 })
             });
         }
