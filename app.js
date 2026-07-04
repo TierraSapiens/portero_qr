@@ -41,7 +41,7 @@ async function cargarEdificio(idEdificio) {
             return;
         }
 
-        // ORDENAMIENTO
+        // ORDENAMIENTO NATURAL PERFECTO
         departamentos.sort((a, b) => {
             const comparaciónPiso = a.piso.localeCompare(b.piso, undefined, { numeric: true });
             if (comparaciónPiso !== 0) return comparaciónPiso;
@@ -59,8 +59,8 @@ async function cargarEdificio(idEdificio) {
                 <span class="text-lg font-bold">${depto.letra}</span>
             `;
 
-            // AL HACER CLIC: Llamamos a la nueva función del timbre
-            boton.onclick = () => tocarTimbre(depto.id, depto.piso, depto.letra);
+            // CAMBIO CLAVE: Al hacer clic, ahora abrimos el Escudo en lugar de tocar directo
+            boton.onclick = () => abrirModalIdentificacion(depto.id, depto.piso, depto.letra);
 
             grillaEl.appendChild(boton);
         });
@@ -69,10 +69,10 @@ async function cargarEdificio(idEdificio) {
     }
 }
 
-// 3. TIMBRE ELECTRONICO
-async function tocarTimbre(idDepartamento, piso, letra) {
+// 3. TIMBRE ELECTRÓNICO (Ahora recibe quién es el visitante)
+async function tocarTimbre(idDepartamento, piso, letra, identificacion = "Visita no identificada") {
     // A. Feedback visual rápido para la visita
-    alert(`🔔 Tocando timbre en Piso ${piso} - ${letra}...\nPor favor, aguarda un momento.`);
+    alert(`🔔 Enviando aviso a Piso ${piso} - ${letra}...\nPor favor, aguarda un momento en la puerta.`);
     
     try {
         const { data: residentes, error } = await clienteSupabase
@@ -85,11 +85,12 @@ async function tocarTimbre(idDepartamento, piso, letra) {
             return;
         }
 
-        // B.alerta silenciosamente en segundo plano
+        // B. Enviamos la alerta enriquecida a Telegram
         for (const residente of residentes) {
             if (!residente.telegram_chat_id) continue;
 
-            const mensaje = `🔔 *¡DING DONG!*\nEstán tocando el timbre desde el Portero QR para el departamento *Piso ${piso} - ${letra}*.`;
+            // Agregamos la identificación al mensaje de Telegram
+            const mensaje = `🔔 *¡DING DONG!*\nEstán tocando el timbre en el portero para el *Piso ${piso} - ${letra}*.\n\n👤 *Motivo / Dice ser:* ${identificacion}`;
             const urlTelegram = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
             
             await fetch(urlTelegram, {
@@ -106,4 +107,78 @@ async function tocarTimbre(idDepartamento, piso, letra) {
     } catch (err) {
         console.error("Error al procesar el timbre:", err);
     }
+}
+
+// =================================================================
+// 4. LÓGICA DEL ESCUDO DE IDENTIFICACIÓN (Paso 1 - v1.04)
+// =================================================================
+
+// Variables para recordar qué departamento eligió el visitante
+let idDeptoTemporal = null;
+let pisoTemporal = null;
+let letraTemporal = null;
+let motivoSeleccionado = "";
+
+// Abre el modal cuando tocan un departamento en la botonera
+function abrirModalIdentificacion(id, piso, letra) {
+    idDeptoTemporal = id;
+    pisoTemporal = piso;
+    letraTemporal = letra;
+    motivoSeleccionado = ""; // Reiniciamos el motivo
+    
+    // Actualizamos el título del modal
+    document.getElementById('modal-titulo').innerText = `Llamando a Piso ${piso} - ${letra}`;
+    
+    // Limpiamos los campos y estilos del intento anterior
+    document.getElementById('input-mensaje').value = '';
+    resetearEstilosBotones();
+    
+    // Mostramos la ventana emergente
+    document.getElementById('modal-identificacion').classList.remove('hidden');
+}
+
+// Cierra el modal si se arrepienten o cierran con la X
+function cerrarModal() {
+    document.getElementById('modal-identificacion').classList.add('hidden');
+}
+
+// Resalta el botón rápido que clickeó el usuario
+function seleccionarMotivo(motivo, botonClickeado) {
+    motivoSeleccionado = motivo;
+    resetearEstilosBotones();
+    
+    // Resaltamos el botón elegido en color azul
+    botonClickeado.classList.remove('bg-slate-800', 'border-slate-700');
+    botonClickeado.classList.add('bg-blue-600/30', 'border-blue-500', 'text-blue-300', 'font-bold');
+}
+
+function resetearEstilosBotones() {
+    const botones = document.querySelectorAll('.motivo-btn');
+    botones.forEach(btn => {
+        btn.classList.add('bg-slate-800', 'border-slate-700');
+        btn.classList.remove('bg-blue-600/30', 'border-blue-500', 'text-blue-300', 'font-bold');
+    });
+}
+
+// El Filtro Anti-Bromas: Verifica que se hayan identificado antes de llamar
+function confirmarTimbre() {
+    const textoEscrito = document.getElementById('input-mensaje').value.trim();
+    
+    // VALIDACIÓN: Si no eligió un botón rápido Y tampoco escribió nada, bloqueamos
+    if (!motivoSeleccionado && !textoEscrito) {
+        alert("⚠️ Por favor, selecciona una opción (Ej: Delivery) o escribe un mensaje para poder llamar.");
+        return;
+    }
+    
+    // Armamos el texto de identificación final
+    let identificacionFinal = motivoSeleccionado;
+    if (textoEscrito) {
+        identificacionFinal = motivoSeleccionado ? `${motivoSeleccionado} - "${textoEscrito}"` : `💬 "${textoEscrito}"`;
+    }
+    
+    // Cerramos el modal
+    cerrarModal();
+    
+    // ¡Disparamos el timbre real pasándole quién está en la puerta!
+    tocarTimbre(idDeptoTemporal, pisoTemporal, letraTemporal, identificacionFinal);
 }
