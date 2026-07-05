@@ -124,44 +124,49 @@ async function tocarTimbre(idDepartamento, piso, letra, identificacion = "Visita
 }
 
 // =================================================================
-// 4. LÓGICA DEL ESCUDO DE IDENTIFICACIÓN (Paso 1 - v1.04)
+// 4. LÓGICA DEL ESCUDO DE IDENTIFICACIÓN Y RADAR DE RESPUESTA (v1.04)
 // =================================================================
 
-// Variables para recordar qué departamento eligió el visitante
 let idDeptoTemporal = null;
 let pisoTemporal = null;
 let letraTemporal = null;
 let motivoSeleccionado = "";
+let intervaloRadar = null; // Variable para controlar el radar
 
 // Abre el modal cuando tocan un departamento en la botonera
 function abrirModalIdentificacion(id, piso, letra) {
     idDeptoTemporal = id;
     pisoTemporal = piso;
     letraTemporal = letra;
-    motivoSeleccionado = ""; // Reiniciamos el motivo
+    motivoSeleccionado = "";
     
-    // Actualizamos el título del modal
+    // Si había un radar viejo encendido, lo apagamos
+    if (intervaloRadar) clearInterval(intervaloRadar);
+    
+    // Reseteamos la vista para mostrar el Formulario (y ocultar la Espera)
+    document.getElementById('seccion-formulario').classList.remove('hidden');
+    document.getElementById('seccion-espera').classList.add('hidden');
+    document.getElementById('mensaje-respuesta-vecino').classList.add('hidden');
+    document.getElementById('icono-espera').className = "animate-spin text-5xl mb-4 inline-block";
+    document.getElementById('icono-espera').innerText = "⌛";
+    document.getElementById('texto-estado-espera').innerText = "Aguarda en la puerta, por favor. El vecino está leyendo tu llamado en su celular.";
+    
     document.getElementById('modal-titulo').innerText = `Llamando a Piso ${piso} - ${letra}`;
-    
-    // Limpiamos los campos y estilos del intento anterior
+    document.getElementById('modal-subtitulo').innerText = "Por seguridad, indícale al vecino quién eres";
     document.getElementById('input-mensaje').value = '';
     resetearEstilosBotones();
     
-    // Mostramos la ventana emergente
     document.getElementById('modal-identificacion').classList.remove('hidden');
 }
 
-// Cierra el modal si se arrepienten o cierran con la X
 function cerrarModal() {
+    if (intervaloRadar) clearInterval(intervaloRadar); // Apagamos el radar si cierran
     document.getElementById('modal-identificacion').classList.add('hidden');
 }
 
-// Resalta el botón rápido que clickeó el usuario
 function seleccionarMotivo(motivo, botonClickeado) {
     motivoSeleccionado = motivo;
     resetearEstilosBotones();
-    
-    // Resaltamos el botón elegido en color azul
     botonClickeado.classList.remove('bg-slate-800', 'border-slate-700');
     botonClickeado.classList.add('bg-blue-600/30', 'border-blue-500', 'text-blue-300', 'font-bold');
 }
@@ -174,25 +179,111 @@ function resetearEstilosBotones() {
     });
 }
 
-// El Filtro Anti-Bromas: Verifica que se hayan identificado antes de llamar
+// El Filtro Anti-Bromas: Pasa a la Pantalla de Espera y enciende el Radar
 function confirmarTimbre() {
     const textoEscrito = document.getElementById('input-mensaje').value.trim();
     
-    // VALIDACIÓN: Si no eligió un botón rápido Y tampoco escribió nada, bloqueamos
     if (!motivoSeleccionado && !textoEscrito) {
-        alert("⚠️ Por favor, selecciona una opción (Ej: Delivery) o escribe un mensaje para poder llamar.");
+        alert("⚠️ Por favor, selecciona una opción o escribe un mensaje para poder llamar.");
         return;
     }
     
-    // Armamos el texto de identificación final
     let identificacionFinal = motivoSeleccionado;
     if (textoEscrito) {
         identificacionFinal = motivoSeleccionado ? `${motivoSeleccionado} - "${textoEscrito}"` : `💬 "${textoEscrito}"`;
     }
     
-    // Cerramos el modal
-    cerrarModal();
+    // 1. CAMBIAMOS LA VISTA: Ocultamos formulario y mostramos Pantalla de Espera en la PC
+    document.getElementById('seccion-formulario').classList.add('hidden');
+    document.getElementById('seccion-espera').classList.remove('hidden');
+    document.getElementById('espera-piso-letra').innerText = `${pisoTemporal} - ${letraTemporal}`;
+    document.getElementById('modal-subtitulo').innerText = "Conectando en tiempo real con Telegram...";
     
-    // ¡Disparamos el timbre real pasándole quién está en la puerta!
+    // 2. Disparamos el timbre hacia tu celular
     tocarTimbre(idDeptoTemporal, pisoTemporal, letraTemporal, identificacionFinal);
+    
+    // 3. ¡ENCENDEMOS EL RADAR PARA ESCUCHAR TU RESPUESTA!
+    iniciarRadarDeRespuestas(pisoTemporal, letraTemporal);
+}
+
+// =================================================================
+// 📡 EL RADAR: Consulta a Telegram cada 2.5s si el vecino tocó un botón
+// =================================================================
+function iniciarRadarDeRespuestas(piso, letra) {
+    let intentos = 0;
+    const cajaRespuesta = document.getElementById('mensaje-respuesta-vecino');
+    
+    intervaloRadar = setInterval(async () => {
+        intentos++;
+        // Si pasan 60 segundos (24 intentos) y nadie atiende, cortamos la espera
+        if (intentos > 24) {
+            clearInterval(intervaloRadar);
+            document.getElementById('icono-espera').className = "text-5xl mb-4 inline-block";
+            document.getElementById('icono-espera').innerText = "😶";
+            cajaRespuesta.innerHTML = "⚠️ No hubo respuesta rápida. Puedes intentar llamar nuevamente o llamar por teléfono.";
+            cajaRespuesta.className = "block bg-amber-600/30 border border-amber-500 text-amber-200 p-4 rounded-xl font-bold text-sm mb-6";
+            return;
+        }
+
+        try {
+            // Le preguntamos a los servidores de Telegram: "¿Hay algún clic nuevo en los botones?"
+            const urlUpdates = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getUpdates`;
+            const res = await fetch(urlUpdates);
+            const data = await res.json();
+
+            if (data.ok && data.result.length > 0) {
+                // Revisamos los eventos desde el más reciente al más viejo
+                for (let i = data.result.length - 1; i >= 0; i--) {
+                    const item = data.result[i];
+                    
+                    // ¿Es un clic de botón (callback_query) y es para nuestro piso y letra?
+                    if (item.callback_query && item.callback_query.data.includes(`_${piso}_${letra}`)) {
+                        const codigoRespuesta = item.callback_query.data;
+                        const idQuery = item.callback_query.id;
+
+                        // 1. LE DECIMOS A TELEGRAM "¡RECIBIDO!" PARA QUE DEJE DE GIRAR EL RELOJITO EN TU CELULAR
+                        await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/answerCallbackQuery`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                callback_query_id: idQuery,
+                                text: "¡Aviso enviado a la pantalla del edificio! ✅"
+                            })
+                        });
+
+                        // 2. Apagamos el radar porque ya nos respondieron
+                        clearInterval(intervaloRadar);
+
+                        // 3. ACTUALIZAMOS LA PANTALLA DE LA PC/NOTEBOOK CON LA RESPUESTA
+                        document.getElementById('icono-espera').className = "text-5xl mb-4 inline-block animate-bounce";
+                        document.getElementById('icono-espera').innerText = "🔔";
+                        document.getElementById('texto-estado-espera').innerText = "¡El vecino ha respondido a tu llamado!";
+
+                        let textoMostrar = "";
+                        let estiloCaja = "block p-5 rounded-xl font-extrabold text-xl mb-6 shadow-xl animate-pulse ";
+
+                        if (codigoRespuesta.includes("resp_bajo")) {
+                            textoMostrar = "🏃‍♂️ ¡YA BAJO!\nEl vecino va en camino a abrirte.";
+                            estiloCaja += "bg-green-600 text-white border-2 border-green-400";
+                        } else if (codigoRespuesta.includes("resp_espera")) {
+                            textoMostrar = "⏳ ESPERÁ 5 MINUTOS\nPor favor aguarda un momento en la puerta.";
+                            estiloCaja += "bg-blue-600 text-white border-2 border-blue-400";
+                        } else if (codigoRespuesta.includes("resp_hall")) {
+                            textoMostrar = "📦 DÉJALO EN EL HALL / ASCENSOR\nMuchas gracias por tu entrega.";
+                            estiloCaja += "bg-amber-600 text-white border-2 border-amber-300";
+                        } else if (codigoRespuesta.includes("resp_noestoy")) {
+                            textoMostrar = "❌ NO ESTOY EN CASA\nEn este momento no hay nadie para atenderte.";
+                            estiloCaja += "bg-red-600 text-white border-2 border-red-400";
+                        }
+
+                        cajaRespuesta.innerHTML = textoMostrar;
+                        cajaRespuesta.className = estiloCaja;
+                        break;
+                    }
+                }
+            }
+        } catch (error) {
+            console.error("Error en el radar de Telegram:", error);
+        }
+    }, 2500); // Consulta a Telegram cada 2.5 segundos
 }
