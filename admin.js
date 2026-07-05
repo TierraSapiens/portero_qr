@@ -2,10 +2,6 @@ const SUPABASE_URL = 'https://onkvblpxdoziwfdcsuxm.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_VnqeSIIwxchGOSbDi6y4-Q_g0SRbXBP';
 const clienteSupabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-const SUPABASE_URL = 'https://onkvblpxdoziwfdcsuxm.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_VnqeSIIwxchGOSbDi6y4-Q_g0SRbXBP';
-const clienteSupabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
 // 🔑 CONFIGURACIÓN DE TU CONTRASEÑA (Cámbiala por la que desees)
 const CLAVE_SECRETA_CONSORCIO = "Gala2026"; 
 
