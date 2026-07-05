@@ -153,4 +153,22 @@
     <!-- Vinculación con el JS del Panel -->
     <script src="admin.js"></script>
 </body>
+<div id="pantalla-bloqueo" class="fixed inset-0 bg-slate-950 flex items-center justify-center p-4 z-50">
+    <div class="bg-slate-900 border border-slate-800 p-8 rounded-2xl max-w-md w-full text-center space-y-6 shadow-2xl">
+        <div class="text-5xl animate-bounce">🔒</div>
+        <div>
+            <h2 class="text-xl font-black text-white uppercase tracking-tight">Acceso Restringido</h2>
+            <p class="text-xs text-slate-400 mt-1">Introduce la clave del consorcio para gestionar el edificio</p>
+        </div>
+        
+        <div class="space-y-3">
+            <input type="password" id="input-password-admin" placeholder="Escribe la contraseña aquí" 
+                   class="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-sm text-center text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 font-mono tracking-widest">
+            <button onclick="intentarAcceso()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-4 rounded-xl shadow-lg shadow-blue-600/30 transition text-sm uppercase tracking-wide">
+                Ingresar al Panel
+            </button>
+        </div>
+        <p id="error-password" class="text-xs text-red-400 font-semibold hidden">❌ Contraseña incorrecta. Inténtalo de nuevo.</p>
+    </div>
+</div>
 </html>

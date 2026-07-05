@@ -2,9 +2,57 @@ const SUPABASE_URL = 'https://onkvblpxdoziwfdcsuxm.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_VnqeSIIwxchGOSbDi6y4-Q_g0SRbXBP';
 const clienteSupabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+const SUPABASE_URL = 'https://onkvblpxdoziwfdcsuxm.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_VnqeSIIwxchGOSbDi6y4-Q_g0SRbXBP';
+const clienteSupabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// 🔑 CONFIGURACIÓN DE TU CONTRASEÑA (Cámbiala por la que desees)
+const CLAVE_SECRETA_CONSORCIO = "Gala2026"; 
+
 let idEdificioActual = 'edificio-gala I';
 let listaDepartamentos = [];
 
+// Evento Inicializador con control de seguridad
+document.addEventListener('DOMContentLoaded', () => {
+    const parametros = new URLSearchParams(window.location.search);
+    if (parametros.get('edificio')) {
+        idEdificioActual = parametros.get('edificio');
+    }
+
+    // Revisamos si el administrador ya puso la clave correctamente en esta sesión
+    if (sessionStorage.getItem('admin_autenticado') === 'true') {
+        // Si ya estaba autenticado, ocultamos el candado y cargamos el panel
+        document.getElementById('pantalla-bloqueo').classList.add('hidden');
+        cargarTodo();
+    } else {
+        // Si no, dejamos la pantalla de bloqueo activa y escuchamos el botón "Enter" en el teclado
+        document.getElementById('input-password-admin').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') intentarAcceso();
+        });
+    }
+});
+
+// Función que valida la contraseña escrita
+function intentarAcceso() {
+    const claveEscrita = document.getElementById('input-password-admin').value;
+    const errorEl = document.getElementById('error-password');
+
+    if (claveEscrita === CLAVE_SECRETA_CONSORCIO) {
+        // Guardamos en la memoria temporal del navegador que ya se autenticó con éxito
+        sessionStorage.setItem('admin_autenticado', 'true');
+        
+        // Hacemos desaparecer la pantalla de bloqueo con estilo
+        document.getElementById('pantalla-bloqueo').classList.add('hidden');
+        
+        // Cargamos los datos de Supabase
+        cargarTodo();
+    } else {
+        // Mostramos el cartel rojo de error
+        errorEl.classList.remove('hidden');
+        document.getElementById('input-password-admin').value = '';
+        document.getElementById('input-password-admin').focus();
+    }
+}
 document.addEventListener('DOMContentLoaded', () => {
     const parametros = new URLSearchParams(window.location.search);
     if (parametros.get('edificio')) {
